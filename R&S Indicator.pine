@@ -2,15 +2,14 @@
 //  Dynamic Support & Resistance — 2-Year Accumulation
 //  Strategy: Pivot clustering + touch-count strength classification
 //
-//  TIMEFRAME GUIDE  →  set "Lookback Bars" to:
-//    Daily   → 504  (≈ 2 trading years)
-//    Weekly  → 104
-//    4H      → 2190
-//    1H      → 8760
+//  TIMEFRAME GUIDE  →  set "Years To Accumulate" to:
+//    Daily   → 2  (≈ 2 trading years)
+//    Weekly  → 2
+//    4H      → 2
+//    1H      → 2
 // ════════════════════════════════════════════════════════════════════════════
 //@version=5
-indicator("Dynamic S/R — 2Y Accumulation", overlay=true,
-          max_lines_count=500, max_labels_count=500)
+indicator("Dynamic S/R — 2Y Accumulation", overlay=true, max_lines_count=500, max_labels_count=500)
 
 // ──────────────────────────────────────────────────────────────────────────
 //  ⚙  INPUTS
@@ -21,18 +20,15 @@ var string GC = "🎨  Style"
 
 leftLen   = input.int  (10,    "Pivot Left Bars",             group=GP, minval=2,   maxval=50)
 rightLen  = input.int  (10,    "Pivot Right Bars",            group=GP, minval=2,   maxval=50)
-mergePct  = input.float(0.5,   "Cluster Merge Zone %",        group=GP, minval=0.1, maxval=3.0, step=0.1,
-             tooltip="Pivots within this % of each other are merged into one level")
+mergePct  = input.float(0.5, "Cluster Merge Zone %", group=GP, minval=0.1, maxval=3.0, step=0.1, tooltip="Pivots within this % of each other are merged into one level")
 
-minorTch  = input.int  (2,     "Min Touches → Minor Level",   group=GS, minval=1,
-             tooltip="A level is drawn if it has been respected at least this many times")
-majorTch  = input.int  (4,     "Min Touches → Major Level",   group=GS, minval=2,
-             tooltip="A level is upgraded to MAJOR once it reaches this touch count")
+minorTch  = input.int(2, "Min Touches → Minor Level", group=GS, minval=1, tooltip="A level is drawn if it has been respected at least this many times")
+majorTch  = input.int(4, "Min Touches → Major Level", group=GS, minval=2, tooltip="A level is upgraded to MAJOR once it reaches this touch count")
 // ─────────────────────────────────────────────────────────
 // Dynamic Lookback Based on Current Chart Timeframe
 // ─────────────────────────────────────────────────────────
 
-yearsBack = input.float(5.0, "Years To Accumulate", group=GS, minval=0.5, step=0.5)
+yearsBack = input.float(5.0, "Years To Accumulate", group=GS, minval=0.5, step=0.5, tooltip="Number of years of history to accumulate for pivot clustering")
 
 // approximate bars per year based on timeframe
 barsPerYear =
@@ -148,15 +144,12 @@ if barstate.islast
             if not isMajor and not showMin
                 continue
 
-            clr = isMajor ? (isRes ? majResC : majSupC)
-                          : (isRes ? minResC : minSupC)
+            clr = isMajor ? (isRes ? majResC : majSupC) : (isRes ? minResC : minSupC)
 
             wid = isMajor ? 3 : 1
             sty = isMajor ? line.style_solid : line.style_dashed
 
-            ln = line.new(startBar, lvl, bar_index, lvl,
-                          color=clr, width=wid, style=sty,
-                          extend=extend.right)
+            ln = line.new(startBar, lvl, bar_index, lvl, color=clr, width=wid, style=sty, extend=extend.right)
 
             array.push(a_lines, ln)
 
@@ -167,10 +160,6 @@ if barstate.islast
 
                 sz_lbl = isMajor ? size.normal : size.small
 
-                lb = label.new(bar_index + 4, lvl, tag,
-                               color=color.new(clr, 60),
-                               textcolor=color.white,
-                               style=label.style_label_left,
-                               size=sz_lbl)
+                lb = label.new(bar_index + 4, lvl, tag, color=color.new(clr, 60), textcolor=color.white, style=label.style_label_left, size=sz_lbl)
 
                 array.push(a_lbls, lb)
