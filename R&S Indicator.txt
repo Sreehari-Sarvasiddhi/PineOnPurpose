@@ -1,0 +1,44 @@
+Dynamic S/R — 2Y Accumulation
+
+This Pine Script indicator builds dynamic support and resistance lines by accumulating pivot levels over a historical window and classifying them by strength. It is designed to provide users with persistent levels that reflect repeated market reactions, rather than single isolated pivots.
+
+1. Pivot Detection
+- The script uses `ta.pivothigh()` and `ta.pivotlow()` to detect swing highs and lows.
+- Each pivot is only confirmed after `rightLen` bars, so the actual pivot price is the value at a bar in the recent past.
+- Both bullish and bearish pivots are included as candidate support and resistance prices.
+
+2. Cluster Aggregation
+- New pivot prices are merged into existing clusters if they are within a margin percentage (`mergePct`) of a cluster price.
+- Clusters represent support/resistance levels formed by multiple pivots at nearly the same price.
+- On merge, the cluster price is updated as a weighted average, and the cluster’s touch count increments.
+- This builds a history of repeated level tests, which is more reliable than one-off pivot points.
+
+3. Years-Based Lookback
+- Instead of requesting a raw bar count, the indicator uses a `Years To Accumulate` input.
+- It converts years into approximate bars based on the current chart timeframe:
+  - minute charts use `525600 / timeframe.multiplier`
+  - daily charts use `252`
+  - weekly charts use `52`
+  - monthly charts use `12`
+- The converted bar count is capped at 5000 for performance.
+- This keeps the level accumulation behavior consistent while making the user setting time-based.
+
+4. Strength Classification
+- Only clusters with at least `minorTch` touches are drawn.
+- Clusters reaching `majorTch` touches are classified as major levels.
+- This differentiates weak price reactions from strong, repeatedly tested support/resistance zones.
+
+5. Rendering Logic
+- The script redraws lines and labels only on the last bar, which helps maintain performance and ensures the chart reflects live conditions.
+- Old lines and labels are deleted each update, then recreated from current clusters.
+- Only clusters with recent interaction within the lookback window are plotted.
+- Support and resistance lines are colored and styled differently for minor versus major classification.
+- Labels show whether a level is `SUP` or `RES`, whether it is `Minor` or `MAJOR`, and the number of touches.
+
+6. User Benefits
+- Traders obtain a visual map of levels that have been tested multiple times.
+- The years-based lookback is easier to understand and configure than a raw bar count.
+- Stronger levels are visually separated from weaker ones, helping stakeholders assess level quality.
+- The approach is well suited for medium- to long-term analysis because it aggregates repeated market structure over time.
+
+Overall, the indicator converts pivot highs and lows into an evolving set of support/resistance lines by clustering nearby pivots, counting touches, and limiting the output to a meaningful history window. This makes the levels more robust, repeatable, and easier for users to interpret than raw pivot lines alone.
