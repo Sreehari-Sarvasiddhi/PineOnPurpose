@@ -1,0 +1,176 @@
+// ════════════════════════════════════════════════════════════════════════════
+//  Dynamic Support & Resistance — 2-Year Accumulation
+//  Strategy: Pivot clustering + touch-count strength classification
+//
+//  TIMEFRAME GUIDE  →  set "Lookback Bars" to:
+//    Daily   → 504  (≈ 2 trading years)
+//    Weekly  → 104
+//    4H      → 2190
+//    1H      → 8760
+// ════════════════════════════════════════════════════════════════════════════
+//@version=5
+indicator("Dynamic S/R — 2Y Accumulation", overlay=true,
+          max_lines_count=500, max_labels_count=500)
+
+// ──────────────────────────────────────────────────────────────────────────
+//  ⚙  INPUTS
+// ──────────────────────────────────────────────────────────────────────────
+var string GP = "⚙  Pivot Detection"
+var string GS = "📊  Strength Classification"
+var string GC = "🎨  Style"
+
+leftLen   = input.int  (10,    "Pivot Left Bars",             group=GP, minval=2,   maxval=50)
+rightLen  = input.int  (10,    "Pivot Right Bars",            group=GP, minval=2,   maxval=50)
+mergePct  = input.float(0.5,   "Cluster Merge Zone %",        group=GP, minval=0.1, maxval=3.0, step=0.1,
+             tooltip="Pivots within this % of each other are merged into one level")
+
+minorTch  = input.int  (2,     "Min Touches → Minor Level",   group=GS, minval=1,
+             tooltip="A level is drawn if it has been respected at least this many times")
+majorTch  = input.int  (4,     "Min Touches → Major Level",   group=GS, minval=2,
+             tooltip="A level is upgraded to MAJOR once it reaches this touch count")
+// ─────────────────────────────────────────────────────────
+// Dynamic Lookback Based on Current Chart Timeframe
+// ─────────────────────────────────────────────────────────
+
+yearsBack = input.float(5.0, "Years To Accumulate", group=GS, minval=0.5, step=0.5)
+
+// approximate bars per year based on timeframe
+barsPerYear =
+     timeframe.isminutes ? (525600 / timeframe.multiplier) :
+     timeframe.isdaily   ? 252 :
+     timeframe.isweekly  ? 52 :
+     timeframe.ismonthly ? 12 :
+     252
+
+lookback = math.round(barsPerYear * yearsBack)
+
+// safety cap for TradingView performance
+lookback := math.min(lookback, 5000)
+
+showMin   = input.bool (true,  "Show Minor Levels",           group=GC)
+showMaj   = input.bool (true,  "Show Major Levels",           group=GC)
+showLbls  = input.bool (true,  "Show Labels",                 group=GC)
+
+minSupC   = input.color(color.new(#2196F3, 55), "Minor Support",    group=GC)
+minResC   = input.color(color.new(#FF9800, 55), "Minor Resistance", group=GC)
+majSupC   = input.color(color.new(#26A69A, 10), "Major Support",    group=GC)
+majResC   = input.color(color.new(#EF5350, 10), "Major Resistance", group=GC)
+
+// ──────────────────────────────────────────────────────────────────────────
+//  🗂  STATE ARRAYS
+//     a_price — weighted-average price of each cluster
+//     a_count — number of pivot touches in that cluster
+//     a_last  — bar_index of the most-recent touch (for lookback filter)
+// ──────────────────────────────────────────────────────────────────────────
+var float[] a_price = array.new_float(0)
+var int[]   a_count = array.new_int(0)
+var int[]   a_last  = array.new_int(0)
+var line[]  a_lines = array.new_line(0)
+var label[] a_lbls  = array.new_label(0)
+
+mergeRatio = mergePct / 100.0
+
+// ──────────────────────────────────────────────────────────────────────────
+//  📌  PIVOT DETECTION
+//     ta.pivothigh / ta.pivotlow confirm a pivot after rightLen bars,
+//     so the true pivot bar is (bar_index - rightLen).
+// ──────────────────────────────────────────────────────────────────────────
+ph = ta.pivothigh(high, leftLen, rightLen)
+pl = ta.pivotlow (low,  leftLen, rightLen)
+
+pivotBarIdx = bar_index - rightLen
+
+// ──────────────────────────────────────────────────────────────────────────
+//  🔗  MERGE PIVOT INTO CLUSTER ARRAY
+// ──────────────────────────────────────────────────────────────────────────
+mergePivot(price) =>
+    sz     = array.size(a_price)
+    merged = false
+    if sz > 0
+        for i = 0 to sz - 1
+            ex  = array.get(a_price, i)
+            pct = math.abs(price - ex) / ex
+            if pct <= mergeRatio
+                cnt = array.get(a_count, i)
+                array.set(a_price, i, (ex * cnt + price) / (cnt + 1))
+                array.set(a_count, i, cnt + 1)
+                array.set(a_last,  i, pivotBarIdx)
+                merged := true
+                break
+    if not merged
+        array.push(a_price, price)
+        array.push(a_count, 1)
+        array.push(a_last,  pivotBarIdx)
+
+if not na(ph)
+    mergePivot(ph)
+if not na(pl)
+    mergePivot(pl)
+
+// ──────────────────────────────────────────────────────────────────────────
+//  🖊  RENDER  (only on the last bar so lines update with each new candle)
+// ──────────────────────────────────────────────────────────────────────────
+if barstate.islast
+
+    // Delete old lines
+    if array.size(a_lines) > 0
+        for i = 0 to array.size(a_lines) - 1
+            line.delete(array.get(a_lines, i))
+
+    // Delete old labels
+    if array.size(a_lbls) > 0
+        for i = 0 to array.size(a_lbls) - 1
+            label.delete(array.get(a_lbls, i))
+
+    array.clear(a_lines)
+    array.clear(a_lbls)
+
+    startBar = math.max(0, bar_index - lookback)
+
+    // Draw levels
+    if array.size(a_price) > 0
+        for i = 0 to array.size(a_price) - 1
+
+            lastTouch = array.get(a_last,  i)
+            cnt       = array.get(a_count, i)
+            lvl       = array.get(a_price, i)
+
+            if lastTouch < startBar
+                continue
+            if cnt < minorTch
+                continue
+
+            isMajor = cnt >= majorTch
+            isRes   = lvl > close
+
+            if isMajor and not showMaj
+                continue
+            if not isMajor and not showMin
+                continue
+
+            clr = isMajor ? (isRes ? majResC : majSupC)
+                          : (isRes ? minResC : minSupC)
+
+            wid = isMajor ? 3 : 1
+            sty = isMajor ? line.style_solid : line.style_dashed
+
+            ln = line.new(startBar, lvl, bar_index, lvl,
+                          color=clr, width=wid, style=sty,
+                          extend=extend.right)
+
+            array.push(a_lines, ln)
+
+            if showLbls
+                srType   = isRes ? "RES" : "SUP"
+                strength = isMajor ? "⬛ MAJOR " + srType : "▫ Minor " + srType
+                tag      = strength + "  ·  " + str.tostring(cnt) + " touches"
+
+                sz_lbl = isMajor ? size.normal : size.small
+
+                lb = label.new(bar_index + 4, lvl, tag,
+                               color=color.new(clr, 60),
+                               textcolor=color.white,
+                               style=label.style_label_left,
+                               size=sz_lbl)
+
+                array.push(a_lbls, lb)
